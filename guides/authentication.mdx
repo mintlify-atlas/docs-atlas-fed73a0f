@@ -31,7 +31,7 @@ To authenticate with your Nginx Proxy Manager instance, you need three pieces of
     - Token expiration time
     
     You'll see a confirmation message:
-    ```
+    ```text
     Login successful. Token saved in OS keyring.
     Token expires: 2026-03-10T12:34:56.000Z
     ```
@@ -57,7 +57,7 @@ This displays:
 - Token expiration timestamp
 
 <Accordion title="Example output">
-  ```
+  ```text
   Stored login found in OS keyring.
   Identity: admin@example.com
   Base URL: http://192.168.1.246/api
@@ -124,7 +124,7 @@ npmctl login \
 
 <Warning>
   If your NPM account has 2FA enabled, the login command will fail with:
-  ```
+  ```text
   2FA required. Use /tokens/2fa flow manually for now.
   ```
   

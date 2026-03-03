@@ -24,7 +24,7 @@ If issues are found, `doctor` provides distro-specific installation instructions
 
 ### Example output (healthy system)
 
-```
+```text
 npmctl doctor
 Platform: Linux 6.1.0-18-amd64
 Python: 3.11.2 (/home/user/.npmctl/venv/bin/python)
@@ -41,7 +41,7 @@ All checks passed.
 
 ### Example output (issues found)
 
-```
+```text
 npmctl doctor
 Platform: Linux 6.1.0-18-amd64
 Python: 3.11.2 (/home/user/.npmctl/venv/bin/python)
@@ -69,7 +69,7 @@ Fallback (less secure):
 This is the most common issue, especially on minimal Linux installations.
 
 **Error message:**
-```
+```text
 Failed to read secret from keyring: No recommended backend was available
 ```
 
@@ -168,7 +168,7 @@ npmctl login-status
 ### DBus not available
 
 **Error message:**
-```
+```text
 org.freedesktop.DBus.Error.NoReply: Did not receive a reply
 ```
 
@@ -227,7 +227,7 @@ chmod 600 /home/user/.npmctl/credentials.env
 ```
 
 Use in cron:
-```cron
+```bash
 0 2 * * * /home/user/.npmctl/run-with-creds.sh add-cert-cloudflare --domain example.com
 ```
 
@@ -236,7 +236,7 @@ Use in cron:
 ### Connection refused
 
 **Error message:**
-```
+```text
 Connection refused (or similar network error)
 ```
 
@@ -283,7 +283,7 @@ Connection refused (or similar network error)
 ### Authentication errors
 
 **Error message:**
-```
+```text
 401 Unauthorized
 ```
 
@@ -315,7 +315,7 @@ Connection refused (or similar network error)
   
   <Accordion title="2FA enabled">
     If your NPM account has 2FA enabled:
-    ```
+    ```text
     2FA required. Use /tokens/2fa flow manually for now.
     ```
     
@@ -332,7 +332,7 @@ Connection refused (or similar network error)
 ### Cloudflare API token errors
 
 **Error message:**
-```
+```text
 Cloudflare API error (various messages)
 ```
 
@@ -371,7 +371,7 @@ Cloudflare API error (various messages)
 ### DNS propagation timeout
 
 **Error message:**
-```
+```text
 Let's Encrypt validation failed (DNS record not found)
 ```
 
@@ -395,7 +395,7 @@ npmctl add-proxy-with-cert \
 ### Let's Encrypt rate limits
 
 **Error message:**
-```
+```text
 Rate limit exceeded
 ```
 
@@ -475,7 +475,7 @@ This shows:
 ### Certificate ID not found
 
 **Error message:**
-```
+```text
 Certificate with ID X not found
 ```
 
