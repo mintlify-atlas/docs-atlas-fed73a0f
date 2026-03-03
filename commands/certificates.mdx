@@ -1,0 +1,95 @@
+---
+title: Certificate commands
+description: Manage SSL/TLS certificates with npmctl
+---
+
+The certificate commands allow you to create Let's Encrypt SSL/TLS certificates using Cloudflare DNS challenge validation.
+
+## npmctl add-cert-cloudflare
+
+Create a Let's Encrypt certificate using Cloudflare DNS challenge. This is useful for obtaining wildcard certificates or certificates for domains that aren't publicly accessible.
+
+```bash
+npmctl add-cert-cloudflare \
+  --domain example.com \
+  --domain "*.example.com"
+```
+
+### Parameters
+
+<ParamField path="--domain" type="string" required>
+  Domain name to include in the certificate. Can be repeated multiple times to create a multi-domain certificate. Use `-d` as a shorthand.
+</ParamField>
+
+<ParamField path="--cloudflare-api-token" type="string">
+  Cloudflare API token with DNS edit permissions. If not provided, the token will be read from the OS keyring (set via `npmctl cf-token-set`) or the `CLOUDFLARE_API_TOKEN` environment variable.
+</ParamField>
+
+<ParamField path="--nice-name" type="string">
+  Human-friendly name for the certificate. If not provided, NPM will generate a name from the domain list.
+</ParamField>
+
+<ParamField path="--propagation-seconds" type="integer" default="30">
+  DNS propagation wait time in seconds. How long to wait after creating DNS records before validating.
+</ParamField>
+
+<ParamField path="--key-type" type="string" default="rsa">
+  Certificate key type. Valid values: `rsa` or `ecdsa`
+</ParamField>
+
+<ParamField path="--base-url" type="string">
+  API base URL. If not provided, uses the URL from your stored login.
+</ParamField>
+
+<ParamField path="--token" type="string">
+  JWT authentication token. If not provided, uses the token from your stored login. Can also be set via `NPM_TOKEN` environment variable.
+</ParamField>
+
+### Examples
+
+```bash
+# Create a certificate for a single domain
+npmctl add-cert-cloudflare -d example.com
+
+# Create a wildcard certificate
+npmctl add-cert-cloudflare \
+  -d example.com \
+  -d "*.example.com"
+
+# Create certificate with custom name and ECDSA key
+npmctl add-cert-cloudflare \
+  -d app.example.com \
+  --nice-name "My App Certificate" \
+  --key-type ecdsa
+
+# Provide Cloudflare token inline
+npmctl add-cert-cloudflare \
+  -d example.com \
+  --cloudflare-api-token your_cloudflare_token
+
+# Use environment variable for Cloudflare token
+export CLOUDFLARE_API_TOKEN=your_cloudflare_token
+npmctl add-cert-cloudflare -d example.com
+```
+
+### How it works
+
+1. Creates DNS TXT records in Cloudflare for ACME challenge
+2. Waits for DNS propagation (default 30 seconds)
+3. Let's Encrypt validates domain ownership via DNS
+4. Certificate is issued and stored in NPM
+5. Returns the certificate ID for use with proxy hosts
+
+### Output
+
+```
+Creating certificate via Cloudflare DNS challenge...
+Certificate created successfully.
+Certificate ID: 5
+Name: example.com, *.example.com
+Domains: example.com, *.example.com
+```
+
+<Tip>
+  Store your Cloudflare API token securely using `npmctl cf-token-set` to avoid passing it on the command line.
+</Tip>

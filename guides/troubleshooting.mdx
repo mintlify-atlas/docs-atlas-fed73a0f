@@ -1,0 +1,532 @@
+---
+title: Troubleshooting
+description: Diagnose and fix common issues with npmctl, including keyring backend problems and connectivity errors
+---
+
+This guide covers common issues you might encounter when using npmctl and how to resolve them.
+
+## Running diagnostics
+
+The first step in troubleshooting any npmctl issue should be running the built-in diagnostics tool:
+
+```bash
+npmctl doctor
+```
+
+This command checks:
+- Platform and Python version
+- Linux distribution (if applicable)
+- Whether the `keyring` Python package is importable
+- Current keyring backend
+- Available recommended keyring backends
+
+If issues are found, `doctor` provides distro-specific installation instructions.
+
+### Example output (healthy system)
+
+```
+npmctl doctor
+Platform: Linux 6.1.0-18-amd64
+Python: 3.11.2 (/home/user/.npmctl/venv/bin/python)
+Linux distro: Ubuntu 22.04.3 LTS
+✔ keyring Python package importable
+Current keyring backend: keyring.backends.SecretService.Keyring
+✔ current backend is recommended
+✔ at least one recommended keyring backend is available
+Recommended backends detected:
+  - keyring.backends.SecretService.Keyring
+
+All checks passed.
+```
+
+### Example output (issues found)
+
+```
+npmctl doctor
+Platform: Linux 6.1.0-18-amd64
+Python: 3.11.2 (/home/user/.npmctl/venv/bin/python)
+Linux distro: Ubuntu 22.04.3 LTS
+✔ keyring Python package importable
+Current keyring backend: keyring.backends.fail.Keyring
+
+Issues found:
+  - Current keyring backend is not recommended. Secure token storage may fail.
+  - No recommended keyring backend is available.
+
+How to fix keyring backend issues:
+Ubuntu/Debian family (recommended backend):
+  sudo apt update && sudo apt install -y gnome-keyring libsecret-1-0 dbus-user-session
+Then run `npmctl login-status` again from your normal user session (not a minimal headless shell without DBus).
+
+Fallback (less secure):
+  /home/user/.npmctl/venv/bin/python -m pip install keyrings.alt
+```
+
+## Keyring backend issues
+
+### No recommended backend available
+
+This is the most common issue, especially on minimal Linux installations.
+
+**Error message:**
+```
+Failed to read secret from keyring: No recommended backend was available
+```
+
+**Solution: Install a keyring backend**
+
+Your solution depends on your Linux distribution:
+
+<Tabs>
+  <Tab title="Ubuntu/Debian">
+    ```bash
+    sudo apt update
+    sudo apt install -y gnome-keyring libsecret-1-0 dbus-user-session
+    ```
+    
+    After installation:
+    1. Log out and log back in (or reboot)
+    2. Verify the fix:
+       ```bash
+       npmctl doctor
+       npmctl login-status
+       ```
+  </Tab>
+  
+  <Tab title="Fedora/RHEL/CentOS">
+    ```bash
+    sudo dnf install -y gnome-keyring libsecret
+    ```
+    
+    After installation:
+    1. Log out and log back in (or reboot)
+    2. Verify the fix:
+       ```bash
+       npmctl doctor
+       npmctl login-status
+       ```
+  </Tab>
+  
+  <Tab title="Arch/Manjaro">
+    ```bash
+    sudo pacman -S --needed gnome-keyring libsecret
+    ```
+    
+    After installation:
+    1. Log out and log back in (or reboot)
+    2. Verify the fix:
+       ```bash
+       npmctl doctor
+       npmctl login-status
+       ```
+  </Tab>
+  
+  <Tab title="Other distributions">
+    Install a Secret Service implementation (GNOME Keyring or KWallet) using your distribution's package manager.
+    
+    Then log out and log back in to start the keyring service.
+  </Tab>
+</Tabs>
+
+### Checking available backends manually
+
+To see what keyring backends are available on your system:
+
+```bash
+~/.npmctl/venv/bin/python -m keyring --list-backends
+```
+
+Look for entries like:
+- `keyring.backends.SecretService.Keyring` (Linux Secret Service)
+- `keyring.backends.kwallet.DBusKeyring` (KDE KWallet)
+- `keyring.backends.macOS.Keyring` (macOS Keychain)
+- `keyring.backends.Windows.WinVaultKeyring` (Windows Credential Manager)
+
+<Warning>
+  If you only see `keyring.backends.fail.Keyring` or `keyring.backends.chainer.ChainerBackend`, you don't have a usable backend installed.
+</Warning>
+
+### Fallback: keyrings.alt (less secure)
+
+If you can't install a proper OS keyring backend, you can use the `keyrings.alt` package as a fallback:
+
+```bash
+~/.npmctl/venv/bin/pip install keyrings.alt
+```
+
+Then verify:
+```bash
+npmctl login-status
+```
+
+<Warning>
+  `keyrings.alt` uses non-recommended backends that may store secrets in plaintext files. Use this only as a last resort, and prefer a proper OS keyring when possible.
+</Warning>
+
+## Session and environment issues
+
+### DBus not available
+
+**Error message:**
+```
+org.freedesktop.DBus.Error.NoReply: Did not receive a reply
+```
+
+**Cause:** You're running npmctl in a minimal shell session without DBus (common in SSH sessions, cron jobs, or Docker containers).
+
+**Solution 1: Run from a normal user session**
+
+Log in to a full desktop session and run npmctl from a terminal there.
+
+**Solution 2: Start DBus in your session**
+
+```bash
+export $(dbus-launch)
+npmctl login-status
+```
+
+**Solution 3: Use environment variables instead**
+
+For automation scenarios (CI/CD, cron), use environment variables instead of the keyring:
+
+```bash
+export NPM_BASE_URL=http://192.168.1.246/api
+export NPM_TOKEN=your_jwt_token_here
+export CLOUDFLARE_API_TOKEN=your_cloudflare_token_here
+
+npmctl add-cert-cloudflare --domain example.com
+```
+
+### Keyring works in terminal but not in cron/systemd
+
+Keyring backends typically require a user session and DBus. For automated tasks:
+
+**Recommended approach:** Use environment variables
+
+Create a script that sources credentials from a secure location:
+
+```bash
+#!/bin/bash
+# /home/user/.npmctl/run-with-creds.sh
+
+source /home/user/.npmctl/credentials.env
+
+npmctl "$@"
+```
+
+`credentials.env`:
+```bash
+export NPM_BASE_URL=http://192.168.1.246/api
+export NPM_TOKEN=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+export CLOUDFLARE_API_TOKEN=your_cloudflare_token_here
+```
+
+Secure the credentials file:
+```bash
+chmod 600 /home/user/.npmctl/credentials.env
+```
+
+Use in cron:
+```cron
+0 2 * * * /home/user/.npmctl/run-with-creds.sh add-cert-cloudflare --domain example.com
+```
+
+## Connectivity and API errors
+
+### Connection refused
+
+**Error message:**
+```
+Connection refused (or similar network error)
+```
+
+**Causes and solutions:**
+
+<AccordionGroup>
+  <Accordion title="NPM is not running">
+    Verify Nginx Proxy Manager is running and accessible:
+    ```bash
+    curl http://192.168.1.246/api
+    ```
+    
+    If this fails, check your NPM container/service status.
+  </Accordion>
+  
+  <Accordion title="Wrong base URL">
+    Common mistakes:
+    - Missing `/api` suffix: should be `http://host/api`, not `http://host`
+    - Wrong port: NPM admin interface is typically on port 81
+    - Wrong IP/hostname
+    
+    Check your login:
+    ```bash
+    npmctl login-status
+    ```
+    
+    Update if needed:
+    ```bash
+    npmctl logout
+    npmctl login --base-url http://192.168.1.246:81/api --identity admin@example.com
+    ```
+  </Accordion>
+  
+  <Accordion title="Firewall blocking access">
+    Verify you can reach NPM from your current machine:
+    ```bash
+    curl -v http://192.168.1.246:81/api/schema
+    ```
+    
+    Check firewall rules on both the NPM host and your local machine.
+  </Accordion>
+</AccordionGroup>
+
+### Authentication errors
+
+**Error message:**
+```
+401 Unauthorized
+```
+
+**Causes and solutions:**
+
+<AccordionGroup>
+  <Accordion title="Token expired">
+    JWT tokens have an expiration time. Check your token status:
+    ```bash
+    npmctl login-status
+    ```
+    
+    If expired, log in again:
+    ```bash
+    npmctl logout
+    npmctl login --base-url http://192.168.1.246/api --identity admin@example.com
+    ```
+  </Accordion>
+  
+  <Accordion title="Wrong credentials">
+    Verify your email and password are correct in the NPM web interface.
+    
+    Then log in again:
+    ```bash
+    npmctl logout
+    npmctl login --base-url http://192.168.1.246/api --identity admin@example.com
+    ```
+  </Accordion>
+  
+  <Accordion title="2FA enabled">
+    If your NPM account has 2FA enabled:
+    ```
+    2FA required. Use /tokens/2fa flow manually for now.
+    ```
+    
+    You must obtain a token manually through the NPM API and provide it via environment variable:
+    ```bash
+    export NPM_TOKEN=your_manually_obtained_token
+    npmctl add-cert-cloudflare --domain example.com
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Certificate creation issues
+
+### Cloudflare API token errors
+
+**Error message:**
+```
+Cloudflare API error (various messages)
+```
+
+**Solutions:**
+
+<Steps>
+  <Step title="Verify token is stored">
+    ```bash
+    npmctl cf-token-status
+    ```
+    
+    If not stored, set it:
+    ```bash
+    npmctl cf-token-set
+    ```
+  </Step>
+  
+  <Step title="Check token permissions">
+    Log in to Cloudflare dashboard and verify your API token has:
+    - Zone / DNS / Edit
+    - Zone / Zone / Read
+    
+    And is scoped to the correct zone(s).
+  </Step>
+  
+  <Step title="Test token manually">
+    ```bash
+    curl -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
+      -H "Authorization: Bearer YOUR_TOKEN_HERE"
+    ```
+    
+    Should return `{"success":true, ...}`
+  </Step>
+</Steps>
+
+### DNS propagation timeout
+
+**Error message:**
+```
+Let's Encrypt validation failed (DNS record not found)
+```
+
+**Solution:** Increase propagation wait time
+
+```bash
+npmctl add-cert-cloudflare \
+  --domain example.com \
+  --propagation-seconds 90
+```
+
+Or for combined command:
+```bash
+npmctl add-proxy-with-cert \
+  --domain app.example.com \
+  --forward-host 192.168.1.10 \
+  --forward-port 8080 \
+  --propagation-seconds 90
+```
+
+### Let's Encrypt rate limits
+
+**Error message:**
+```
+Rate limit exceeded
+```
+
+Let's Encrypt has rate limits:
+- 50 certificates per registered domain per week
+- 5 duplicate certificates per week
+
+**Solutions:**
+- Wait for the rate limit window to reset
+- Use wildcard certificates to cover multiple subdomains with one certificate
+- Delete and recreate certificates in the NPM web interface if you hit duplicate limits
+
+## Debug mode
+
+Enable verbose logging to see full HTTP request/response details:
+
+```bash
+npmctl --debug add-cert-cloudflare --domain example.com
+```
+
+Or via environment variable:
+```bash
+export NPM_CLI_DEBUG=1
+npmctl add-cert-cloudflare --domain example.com
+```
+
+This shows:
+- Full request URLs and payloads
+- Response status codes and bodies
+- Internal error details
+
+<Warning>
+  Debug output may contain sensitive information (tokens, passwords). Don't share debug logs publicly without redacting secrets.
+</Warning>
+
+## Proxy host issues
+
+### 502 Bad Gateway after creating proxy host
+
+**Cause:** Nginx Proxy Manager can't reach the upstream server.
+
+**Troubleshooting:**
+
+<Steps>
+  <Step title="Verify upstream is reachable from NPM">
+    From the NPM host (not your local machine):
+    ```bash
+    curl http://192.168.1.10:8080
+    ```
+    
+    If this fails, check:
+    - Upstream service is running
+    - Firewall allows NPM host to reach upstream
+    - Network connectivity between NPM and upstream
+  </Step>
+  
+  <Step title="Check forward scheme">
+    If upstream uses HTTPS:
+    ```bash
+    npmctl add-proxy-host \
+      --domain app.example.com \
+      --forward-host backend.internal \
+      --forward-port 8443 \
+      --forward-scheme https \
+      --certificate-id 12
+    ```
+  </Step>
+  
+  <Step title="Check NPM logs">
+    View NPM container logs for detailed error messages:
+    ```bash
+    docker logs nginx-proxy-manager
+    ```
+  </Step>
+</Steps>
+
+### Certificate ID not found
+
+**Error message:**
+```
+Certificate with ID X not found
+```
+
+**Solution:** Verify the certificate exists
+
+1. Check the NPM web interface under SSL Certificates
+2. Note the correct certificate ID
+3. Use that ID in your command:
+   ```bash
+   npmctl add-proxy-host \
+     --domain app.example.com \
+     --forward-host 192.168.1.10 \
+     --forward-port 8080 \
+     --certificate-id 12
+   ```
+
+Or create a new certificate:
+```bash
+npmctl add-cert-cloudflare --domain app.example.com
+```
+
+## Getting help
+
+If you're still experiencing issues:
+
+1. **Run diagnostics:**
+   ```bash
+   npmctl doctor
+   ```
+
+2. **Enable debug mode:**
+   ```bash
+   npmctl --debug [your-command]
+   ```
+
+3. **Check NPM logs:**
+   ```bash
+   docker logs nginx-proxy-manager
+   ```
+
+4. **Gather information:**
+   - Your platform (OS, distribution, version)
+   - Python version: `~/.npmctl/venv/bin/python --version`
+   - npmctl version: `npmctl --version`
+   - Error messages and stack traces
+   - Output from `npmctl doctor`
+
+5. **Report the issue:**
+   - GitHub: https://github.com/NiHaiden/nginx-proxy-manager-cli/issues
+   - Include all gathered information (redact sensitive data)
+
+<Tip>
+  Most issues are related to keyring backends on Linux or network connectivity. Start with `npmctl doctor` and work through the distro-specific installation instructions.
+</Tip>

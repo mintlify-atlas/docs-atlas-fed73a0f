@@ -1,0 +1,253 @@
+---
+title: Certificate management
+description: Create and manage Let's Encrypt SSL certificates using Cloudflare DNS challenge with npmctl
+---
+
+The npmctl CLI can automatically create Let's Encrypt SSL certificates for your domains using Cloudflare DNS-01 challenge. This method is particularly useful for wildcard certificates and domains behind firewalls.
+
+## Prerequisites
+
+<Steps>
+  <Step title="Authenticate with NPM">
+    You must be logged in to your Nginx Proxy Manager instance:
+    ```bash
+    npmctl login --base-url http://192.168.1.246/api --identity admin@example.com
+    ```
+  </Step>
+
+  <Step title="Obtain Cloudflare API token">
+    Create an API token in your Cloudflare dashboard with the following permissions:
+    - Zone / DNS / Edit
+    - Zone / Zone / Read
+    
+    Scope it to the specific zones (domains) you want to manage.
+  </Step>
+
+  <Step title="Store Cloudflare token (recommended)">
+    Store your Cloudflare API token in the OS keyring:
+    ```bash
+    npmctl cf-token-set
+    ```
+    See the [secrets management guide](/guides/secrets-management) for details.
+  </Step>
+</Steps>
+
+## Creating a certificate
+
+### Basic certificate for a single domain
+
+```bash
+npmctl add-cert-cloudflare --domain example.com
+```
+
+### Wildcard certificate
+
+To create a certificate that covers both the root domain and all subdomains:
+
+```bash
+npmctl add-cert-cloudflare \
+  --domain example.com \
+  --domain '*.example.com'
+```
+
+<Note>
+  The `--domain` flag can be repeated multiple times to include multiple domains or subdomains in a single certificate.
+</Note>
+
+### Certificate with custom name
+
+```bash
+npmctl add-cert-cloudflare \
+  --domain example.com \
+  --domain '*.example.com' \
+  --nice-name "Example.com Wildcard"
+```
+
+The `--nice-name` parameter sets a human-friendly label that appears in the NPM web interface.
+
+## Configuration options
+
+### Required parameters
+
+<ParamField path="--domain" type="string" required>
+  Domain name to include in the certificate. Can be repeated for multiple domains.
+  
+  Examples:
+  - `--domain example.com`
+  - `--domain '*.example.com'` (wildcard)
+  - Multiple: `--domain example.com --domain www.example.com`
+</ParamField>
+
+### Optional parameters
+
+<ParamField path="--cloudflare-api-token" type="string">
+  Cloudflare API token. If not provided, npmctl will use the token stored in the keyring (via `cf-token-set`), or check the `CLOUDFLARE_API_TOKEN` environment variable.
+</ParamField>
+
+<ParamField path="--nice-name" type="string">
+  Human-friendly certificate name displayed in the NPM interface. If not provided, NPM will auto-generate a name based on the domains.
+</ParamField>
+
+<ParamField path="--propagation-seconds" type="integer" default="30">
+  Number of seconds to wait for DNS propagation after creating the TXT record. Increase this if certificate validation fails due to slow DNS propagation.
+  
+  ```bash
+  npmctl add-cert-cloudflare \
+    --domain example.com \
+    --propagation-seconds 60
+  ```
+</ParamField>
+
+<ParamField path="--key-type" type="string" default="rsa">
+  Certificate key type. Valid values:
+  - `rsa` - RSA 2048-bit key (default, widely compatible)
+  - `ecdsa` - ECDSA P-384 key (smaller, faster, modern)
+  
+  ```bash
+  npmctl add-cert-cloudflare \
+    --domain example.com \
+    --key-type ecdsa
+  ```
+</ParamField>
+
+## Providing the Cloudflare API token
+
+There are three ways to provide your Cloudflare API token, in order of precedence:
+
+<Accordion title="1. Command-line flag (highest priority)">
+  ```bash
+  npmctl add-cert-cloudflare \
+    --domain example.com \
+    --cloudflare-api-token your_token_here
+  ```
+  
+  Useful for testing or one-off operations.
+</Accordion>
+
+<Accordion title="2. Environment variable">
+  ```bash
+  export CLOUDFLARE_API_TOKEN=your_token_here
+  npmctl add-cert-cloudflare --domain example.com
+  ```
+  
+  Useful for scripts and CI/CD pipelines.
+</Accordion>
+
+<Accordion title="3. OS keyring (recommended)">
+  ```bash
+  # Store once
+  npmctl cf-token-set
+  
+  # Use in all subsequent commands
+  npmctl add-cert-cloudflare --domain example.com
+  ```
+  
+  Most secure method for interactive use.
+</Accordion>
+
+<Warning>
+  If no Cloudflare API token is found through any of these methods, the command will fail with an error.
+</Warning>
+
+## Understanding the certificate creation process
+
+When you run `add-cert-cloudflare`, npmctl performs these steps:
+
+1. **Validates parameters**: Checks that all required information is provided
+2. **Contacts NPM API**: Sends a certificate creation request with Cloudflare DNS challenge configuration
+3. **NPM creates TXT records**: NPM uses the Cloudflare API to create DNS TXT records for domain validation
+4. **Waits for propagation**: Waits the specified `propagation-seconds` for DNS to propagate
+5. **Let's Encrypt validates**: Let's Encrypt verifies domain ownership via DNS TXT records
+6. **Certificate issued**: Let's Encrypt issues the certificate
+7. **Certificate stored**: NPM stores the certificate and makes it available for proxy hosts
+
+<Tip>
+  The entire process typically takes 30-60 seconds depending on DNS propagation speed.
+</Tip>
+
+## Example output
+
+Successful certificate creation:
+
+```
+Creating certificate via Cloudflare DNS challenge...
+Certificate created successfully.
+Certificate ID: 12
+Name: Example.com Wildcard
+Domains: example.com, *.example.com
+```
+
+The **Certificate ID** is important - you'll need it when creating proxy hosts.
+
+## Common examples
+
+### Single domain certificate
+
+```bash
+npmctl add-cert-cloudflare \
+  --domain app.example.com
+```
+
+### Wildcard certificate with custom settings
+
+```bash
+npmctl add-cert-cloudflare \
+  --domain example.com \
+  --domain '*.example.com' \
+  --nice-name "Example.com Wildcard" \
+  --propagation-seconds 60 \
+  --key-type ecdsa
+```
+
+### Multiple specific subdomains
+
+```bash
+npmctl add-cert-cloudflare \
+  --domain api.example.com \
+  --domain app.example.com \
+  --domain admin.example.com
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="DNS propagation timeout">
+    If certificate validation fails due to slow DNS propagation, increase the wait time:
+    
+    ```bash
+    npmctl add-cert-cloudflare \
+      --domain example.com \
+      --propagation-seconds 90
+    ```
+  </Accordion>
+  
+  <Accordion title="Cloudflare API token errors">
+    Verify your token is stored correctly:
+    
+    ```bash
+    npmctl cf-token-status
+    ```
+    
+    Check token permissions in the Cloudflare dashboard:
+    - Zone / DNS / Edit
+    - Zone / Zone / Read
+  </Accordion>
+  
+  <Accordion title="Certificate limit reached">
+    Let's Encrypt has rate limits. If you hit the limit:
+    - Wait for the rate limit to reset (typically 1 week)
+    - Use Let's Encrypt staging environment for testing
+    - Consolidate multiple domains into fewer wildcard certificates
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Proxy host management" icon="server" href="/guides/proxy-hosts">
+    Create proxy hosts using your certificates
+  </Card>
+  <Card title="Secrets management" icon="key" href="/guides/secrets-management">
+    Manage your Cloudflare API token in the keyring
+  </Card>
+</CardGroup>

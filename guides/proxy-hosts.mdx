@@ -1,0 +1,395 @@
+---
+title: Proxy host management
+description: Create and configure Nginx proxy hosts with SSL certificates using npmctl
+---
+
+The npmctl CLI provides two commands for creating proxy hosts: one for attaching an existing certificate, and one that creates both the certificate and proxy host in a single operation.
+
+## Prerequisites
+
+<Steps>
+  <Step title="Authenticate with NPM">
+    ```bash
+    npmctl login --base-url http://192.168.1.246/api --identity admin@example.com
+    ```
+  </Step>
+
+  <Step title="For SSL-enabled hosts">
+    Either have an existing certificate ID, or have your Cloudflare API token ready to create one.
+  </Step>
+</Steps>
+
+## Creating a proxy host with an existing certificate
+
+If you already have a certificate (created via `add-cert-cloudflare` or through the NPM web interface), use the `add-proxy-host` command.
+
+### Basic example
+
+```bash
+npmctl add-proxy-host \
+  --domain app.example.com \
+  --forward-host 192.168.1.10 \
+  --forward-port 8080 \
+  --certificate-id 12 \
+  --ssl-forced \
+  --http2-support
+```
+
+This creates a proxy host that:
+- Listens on `app.example.com`
+- Forwards traffic to `192.168.1.10:8080`
+- Uses certificate ID 12 for SSL
+- Forces HTTP to HTTPS redirect
+- Enables HTTP/2
+
+### Configuration parameters
+
+#### Required parameters
+
+<ParamField path="--domain" type="string" required>
+  Domain name for the proxy host. Can be repeated for multiple domains.
+  
+  ```bash
+  npmctl add-proxy-host \
+    --domain app.example.com \
+    --domain www.app.example.com \
+    --forward-host 192.168.1.10 \
+    --forward-port 8080
+  ```
+</ParamField>
+
+<ParamField path="--forward-host" type="string" required>
+  Upstream host or IP address where traffic should be forwarded.
+  
+  Examples:
+  - `192.168.1.10` (internal IP)
+  - `backend-server.local` (hostname)
+  - `10.0.2.5` (container IP)
+</ParamField>
+
+<ParamField path="--forward-port" type="integer" required>
+  Upstream port (1-65535).
+  
+  Common values:
+  - `8080` - Common HTTP port
+  - `3000` - Node.js apps
+  - `5000` - Python Flask default
+  - `8443` - Common HTTPS port
+</ParamField>
+
+#### Optional parameters
+
+<ParamField path="--certificate-id" type="integer">
+  ID of an existing SSL certificate. Get this from the output of `add-cert-cloudflare` or from the NPM web interface.
+  
+  If not provided, the proxy host will be HTTP-only (not recommended for production).
+</ParamField>
+
+<ParamField path="--forward-scheme" type="string" default="http">
+  Upstream protocol. Valid values:
+  - `http` - Forward to HTTP backend (default)
+  - `https` - Forward to HTTPS backend
+  
+  ```bash
+  npmctl add-proxy-host \
+    --domain app.example.com \
+    --forward-host backend.internal \
+    --forward-port 8443 \
+    --forward-scheme https
+  ```
+</ParamField>
+
+<ParamField path="--ssl-forced" type="boolean" default="false">
+  Force HTTP to HTTPS redirect. Recommended for all production sites.
+  
+  ```bash
+  npmctl add-proxy-host \
+    --domain app.example.com \
+    --forward-host 192.168.1.10 \
+    --forward-port 8080 \
+    --certificate-id 12 \
+    --ssl-forced
+  ```
+</ParamField>
+
+<ParamField path="--http2-support" type="boolean" default="false">
+  Enable HTTP/2 support. Recommended for better performance.
+  
+  <Note>
+    HTTP/2 requires an SSL certificate.
+  </Note>
+</ParamField>
+
+<ParamField path="--hsts-enabled" type="boolean" default="false">
+  Enable HTTP Strict Transport Security (HSTS). Tells browsers to only connect via HTTPS.
+  
+  ```bash
+  npmctl add-proxy-host \
+    --domain app.example.com \
+    --forward-host 192.168.1.10 \
+    --forward-port 8080 \
+    --certificate-id 12 \
+    --ssl-forced \
+    --hsts-enabled
+  ```
+</ParamField>
+
+<ParamField path="--hsts-subdomains" type="boolean" default="false">
+  Apply HSTS policy to all subdomains. Only effective when `--hsts-enabled` is true.
+  
+  <Warning>
+    Be careful with this setting - it affects all current and future subdomains.
+  </Warning>
+</ParamField>
+
+### Example output
+
+```
+Creating proxy host...
+Proxy host created successfully.
+Host ID: 45
+Domains: app.example.com
+```
+
+## Creating a proxy host + certificate in one command
+
+The `add-proxy-with-cert` command creates a Cloudflare DNS certificate and proxy host in a single operation. This is the most convenient way to set up a new SSL-enabled proxy host.
+
+### Basic example
+
+```bash
+npmctl add-proxy-with-cert \
+  --domain app.example.com \
+  --forward-host 192.168.1.10 \
+  --forward-port 8080
+```
+
+This command:
+1. Creates a Let's Encrypt certificate for `app.example.com` via Cloudflare DNS
+2. Creates a proxy host using that certificate
+3. Enables SSL, HTTP/2, and HSTS by default
+
+### Wildcard certificate + proxy host
+
+```bash
+npmctl add-proxy-with-cert \
+  --domain app.example.com \
+  --domain '*.app.example.com' \
+  --forward-host 192.168.1.10 \
+  --forward-port 8080
+```
+
+<Note>
+  When using wildcards, the first `--domain` should be the specific subdomain you want to proxy, and subsequent `--domain` flags can include wildcards for the certificate.
+</Note>
+
+### Configuration parameters
+
+The `add-proxy-with-cert` command accepts all parameters from both `add-cert-cloudflare` and `add-proxy-host`.
+
+#### Required parameters
+
+<ParamField path="--domain" type="string" required>
+  Domain name(s) for both the certificate and proxy host.
+</ParamField>
+
+<ParamField path="--forward-host" type="string" required>
+  Upstream host or IP address.
+</ParamField>
+
+<ParamField path="--forward-port" type="integer" required>
+  Upstream port (1-65535).
+</ParamField>
+
+#### Certificate parameters
+
+<ParamField path="--cloudflare-api-token" type="string">
+  Cloudflare API token. Falls back to keyring or `CLOUDFLARE_API_TOKEN` env var.
+</ParamField>
+
+<ParamField path="--propagation-seconds" type="integer" default="30">
+  DNS propagation wait time in seconds.
+</ParamField>
+
+<ParamField path="--key-type" type="string" default="rsa">
+  Certificate key type: `rsa` or `ecdsa`.
+</ParamField>
+
+#### Proxy host parameters
+
+<ParamField path="--forward-scheme" type="string" default="http">
+  Upstream protocol: `http` or `https`.
+</ParamField>
+
+<ParamField path="--ssl-forced" type="boolean" default="true">
+  Force HTTPS redirect. **Defaults to true** for this command (unlike `add-proxy-host`).
+</ParamField>
+
+<ParamField path="--http2-support" type="boolean" default="true">
+  Enable HTTP/2. **Defaults to true** for this command.
+</ParamField>
+
+<ParamField path="--hsts-enabled" type="boolean" default="true">
+  Enable HSTS. **Defaults to true** for this command.
+</ParamField>
+
+<ParamField path="--hsts-subdomains" type="boolean" default="true">
+  Apply HSTS to subdomains. **Defaults to true** for this command.
+</ParamField>
+
+<Note>
+  Notice that `add-proxy-with-cert` enables SSL security features by default, while `add-proxy-host` requires you to explicitly enable them.
+</Note>
+
+### Example output
+
+```
+Step 1/2: Creating certificate via Cloudflare DNS challenge...
+Certificate created (id=12).
+Step 2/2: Creating proxy host with that certificate...
+Certificate and proxy host created successfully.
+Certificate ID: 12
+Proxy Host ID: 45
+Domains: app.example.com
+```
+
+## Common configuration examples
+
+### HTTP-only proxy (not recommended for production)
+
+```bash
+npmctl add-proxy-host \
+  --domain internal.example.local \
+  --forward-host 192.168.1.20 \
+  --forward-port 3000
+```
+
+### Fully secured proxy with existing certificate
+
+```bash
+npmctl add-proxy-host \
+  --domain api.example.com \
+  --forward-host 192.168.1.30 \
+  --forward-port 8080 \
+  --certificate-id 15 \
+  --ssl-forced \
+  --http2-support \
+  --hsts-enabled \
+  --hsts-subdomains
+```
+
+### Backend uses HTTPS
+
+```bash
+npmctl add-proxy-host \
+  --domain app.example.com \
+  --forward-host secure-backend.internal \
+  --forward-port 8443 \
+  --forward-scheme https \
+  --certificate-id 12 \
+  --ssl-forced
+```
+
+### Multiple domains on one proxy host
+
+```bash
+npmctl add-proxy-host \
+  --domain example.com \
+  --domain www.example.com \
+  --forward-host 192.168.1.50 \
+  --forward-port 80 \
+  --certificate-id 20 \
+  --ssl-forced
+```
+
+### One-command setup with all security features
+
+```bash
+npmctl add-proxy-with-cert \
+  --domain app.example.com \
+  --forward-host 192.168.1.10 \
+  --forward-port 8080 \
+  --propagation-seconds 60 \
+  --key-type ecdsa
+```
+
+### Debug mode for troubleshooting
+
+```bash
+npmctl --debug add-proxy-with-cert \
+  --domain app.example.com \
+  --forward-host 192.168.1.10 \
+  --forward-port 8080
+```
+
+The `--debug` flag enables verbose logging of all HTTP requests and responses.
+
+## Understanding the workflow
+
+### add-proxy-host workflow
+
+1. Validates all parameters
+2. Sends proxy host creation request to NPM API
+3. NPM configures Nginx with the specified settings
+4. Returns the new proxy host ID and configuration
+
+### add-proxy-with-cert workflow
+
+1. **Step 1/2**: Creates Cloudflare DNS certificate
+   - Validates Cloudflare API token
+   - Creates DNS TXT records for domain validation
+   - Waits for DNS propagation
+   - Let's Encrypt validates and issues certificate
+2. **Step 2/2**: Creates proxy host
+   - Uses the certificate ID from step 1
+   - Configures proxy with security defaults
+   - Returns both certificate ID and proxy host ID
+
+<Tip>
+  Use `add-proxy-with-cert` for new setups. Use `add-proxy-host` when you want to reuse an existing certificate across multiple proxy hosts.
+</Tip>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Certificate ID not found">
+    Verify the certificate exists and get the correct ID:
+    - Check the NPM web interface under SSL Certificates
+    - Run `add-cert-cloudflare` to create a new certificate
+    - Note the Certificate ID from the command output
+  </Accordion>
+  
+  <Accordion title="502 Bad Gateway">
+    The proxy host is created, but Nginx can't reach the upstream:
+    - Verify `--forward-host` is reachable from the NPM server
+    - Check `--forward-port` is correct and the service is running
+    - Verify firewall rules allow NPM to reach the upstream
+    - Check `--forward-scheme` matches the upstream (http vs https)
+  </Accordion>
+  
+  <Accordion title="add-proxy-with-cert fails at step 1">
+    The certificate creation failed:
+    - Verify Cloudflare API token with `npmctl cf-token-status`
+    - Check token permissions (Zone/DNS/Edit, Zone/Zone/Read)
+    - Increase `--propagation-seconds` if DNS is slow
+    - Check domain is managed by Cloudflare
+  </Accordion>
+  
+  <Accordion title="add-proxy-with-cert fails at step 2">
+    Certificate was created but proxy host creation failed:
+    - Check the error message for specific parameter issues
+    - Verify upstream host/port are valid
+    - The certificate was created and can be reused with `add-proxy-host`
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Certificate management" icon="certificate" href="/guides/certificates">
+    Learn more about certificate creation options
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/guides/troubleshooting">
+    Debug common issues with keyring and connectivity
+  </Card>
+</CardGroup>

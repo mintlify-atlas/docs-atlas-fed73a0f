@@ -1,0 +1,95 @@
+---
+title: Authentication commands
+description: Manage Nginx Proxy Manager authentication with npmctl
+---
+
+The authentication commands allow you to login, check login status, and logout from Nginx Proxy Manager. Credentials are securely stored in your operating system's keyring.
+
+## npmctl login
+
+Login to Nginx Proxy Manager and save your JWT token in the OS keyring.
+
+```bash
+npmctl login --identity user@example.com --base-url http://localhost:81/api
+```
+
+You'll be prompted to enter your password securely.
+
+### Parameters
+
+<ParamField path="--identity" type="string" required>
+  NPM user email address
+</ParamField>
+
+<ParamField path="--secret" type="string" required>
+  NPM password. This parameter will prompt for input and hide the password when typing.
+</ParamField>
+
+<ParamField path="--base-url" type="string" required>
+  API base URL (e.g., `http://host/api` or `https://npm.example.com/api`)
+</ParamField>
+
+<ParamField path="--scope" type="string" default="user">
+  Token scope for authentication
+</ParamField>
+
+### Examples
+
+```bash
+# Login to local Nginx Proxy Manager instance
+npmctl login \
+  --identity admin@example.com \
+  --base-url http://localhost:81/api
+
+# Login to remote instance
+npmctl login \
+  --identity admin@example.com \
+  --base-url https://npm.example.com/api
+```
+
+### What happens
+
+1. Requests a JWT token from the NPM API
+2. Stores the token securely in your OS keyring
+3. Saves the base URL, identity, and token expiration time
+4. The token is automatically used for subsequent commands
+
+<Warning>
+  2FA is not currently supported. If your account requires 2FA, you'll need to use the `/tokens/2fa` flow manually.
+</Warning>
+
+## npmctl login-status
+
+Show whether login information is stored and display non-sensitive details.
+
+```bash
+npmctl login-status
+```
+
+### Output
+
+If logged in, displays:
+- Identity (email)
+- Base URL
+- Token expiration time
+
+If not logged in, shows a message indicating no stored login was found.
+
+### Example output
+
+```
+Stored login found in OS keyring.
+Identity: admin@example.com
+Base URL: http://localhost:81/api
+Token expires: 2026-04-03T12:34:56.789Z
+```
+
+## npmctl logout
+
+Remove stored login token from the OS keyring.
+
+```bash
+npmctl logout
+```
+
+This clears all stored authentication information, including the JWT token, base URL, and identity.

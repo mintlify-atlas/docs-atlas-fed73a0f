@@ -1,0 +1,117 @@
+---
+title: Installation
+description: Install npmctl and set up your development environment
+---
+
+## Requirements
+
+Before installing npmctl, ensure you have the following:
+
+- **Python 3.9+** installed on your system
+- **[uv](https://docs.astral.sh/uv/)** - Python package installer and resolver
+- A running **Nginx Proxy Manager API endpoint** (for example `http://10.0.2.1:81/api`)
+
+<Note>
+  npmctl communicates with Nginx Proxy Manager through its REST API. Make sure your NPM instance is accessible from where you'll run npmctl.
+</Note>
+
+## Install npmctl
+
+### Quick install from GitHub
+
+The easiest way to install npmctl is directly from GitHub without cloning the repository:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/NiHaiden/nginx-proxy-manager-cli/main/install.sh | bash
+```
+
+This command downloads and runs the installation script, which:
+- Installs npmctl into `~/.npmctl/venv`
+- Creates a launcher at `~/.local/bin/npmctl`
+- Adds `~/.local/bin` to your shell PATH configuration
+
+### Install from a specific branch or tag
+
+You can install from a different branch or tag by setting the `NPMCTL_GITHUB_REF` environment variable:
+
+```bash
+NPMCTL_GITHUB_REF=main curl -fsSL https://raw.githubusercontent.com/NiHaiden/nginx-proxy-manager-cli/main/install.sh | bash
+```
+
+### Install from a local checkout
+
+If you've already cloned the repository, you can run the installer locally:
+
+```bash
+./install.sh
+```
+
+<Note>
+  Both installation methods place the application in the same location (`~/.npmctl/venv`) and create the same launcher script.
+</Note>
+
+## Installation location
+
+The installer places npmctl in a dedicated virtual environment:
+
+- **Application**: `~/.npmctl/venv`
+- **Launcher script**: `~/.local/bin/npmctl`
+- **PATH modification**: `~/.local/bin` is added to your shell configuration
+
+After installation, you may need to restart your shell or run `source ~/.bashrc` (or equivalent for your shell) to access the `npmctl` command.
+
+## Development setup
+
+If you're developing npmctl or want to run it from source:
+
+<Steps>
+  <Step title="Clone the repository">
+    Clone the npmctl repository to your local machine:
+    ```bash
+    git clone https://github.com/NiHaiden/nginx-proxy-manager-cli.git
+    cd nginx-proxy-manager-cli
+    ```
+  </Step>
+  
+  <Step title="Sync dependencies">
+    Install dependencies using uv:
+    ```bash
+    uv sync
+    ```
+  </Step>
+  
+  <Step title="Run from source">
+    When developing, prefix commands with `uv run`:
+    ```bash
+    uv run npmctl --help
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  In development mode, always use `uv run npmctl` instead of just `npmctl` to ensure you're running from the local source.
+</Warning>
+
+## Verify installation
+
+After installing, verify that npmctl is working:
+
+```bash
+npmctl --help
+```
+
+You should see the help output with available commands.
+
+For a more thorough check, run the diagnostics command:
+
+```bash
+npmctl doctor
+```
+
+This checks whether a recommended OS keyring backend is available and provides distro-specific installation hints if needed.
+
+## Next steps
+
+<Card title="Quickstart" icon="rocket" href="/quickstart">
+  Learn how to configure npmctl and create your first certificate and proxy host
+</Card>

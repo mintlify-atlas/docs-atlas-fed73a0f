@@ -1,0 +1,175 @@
+---
+title: Environment variables
+description: Configure npmctl using environment variables for base URL, tokens, and debug settings
+---
+
+npmctl supports several environment variables that allow you to configure the CLI without passing options on every command. These variables are particularly useful in CI/CD environments or when you want to set persistent defaults.
+
+## Supported environment variables
+
+<ParamField path="NPM_BASE_URL" type="string">
+  The base URL for your Nginx Proxy Manager API endpoint.
+  
+  **Example:** `http://192.168.1.246/api`
+  
+  This variable eliminates the need to pass `--base-url` on every command. The CLI uses this value if no `--base-url` option is provided.
+</ParamField>
+
+<ParamField path="NPM_TOKEN" type="string">
+  A valid JWT authentication token for the Nginx Proxy Manager API.
+  
+  This variable provides an alternative to storing tokens in the OS keyring. The CLI checks for tokens in this order:
+  1. `--token` command-line option
+  2. `NPM_TOKEN` environment variable
+  3. Token stored in OS keyring (via `npmctl login`)
+  4. Legacy config file
+  
+  <Warning>
+    Using `NPM_TOKEN` is less secure than the OS keyring. Prefer `npmctl login` for interactive environments.
+  </Warning>
+</ParamField>
+
+<ParamField path="CLOUDFLARE_API_TOKEN" type="string">
+  Your Cloudflare API token for DNS challenge certificate creation.
+  
+  The CLI checks for Cloudflare tokens in this order:
+  1. `--cloudflare-api-token` command-line option
+  2. `CLOUDFLARE_API_TOKEN` environment variable
+  3. Token stored in OS keyring (via `npmctl cf-token-set`)
+  
+  **Required for:** `add-cert-cloudflare` and `add-proxy-with-cert` commands
+</ParamField>
+
+<ParamField path="NPM_CLI_CONFIG" type="string">
+  Path to a legacy JSON configuration file.
+  
+  **Default:** `~/.config/npmctl/config.json`
+  
+  <Note>
+    This variable is primarily for backward compatibility. New installations should use the OS keyring via `npmctl login`.
+  </Note>
+</ParamField>
+
+<ParamField path="NPM_CLI_DEBUG" type="string">
+  Enable verbose debug logging for HTTP requests and responses.
+  
+  **Accepted values:** `1`, `true`, or any non-empty string
+  
+  When enabled, npmctl logs:
+  - Full request URLs and methods
+  - Request and response payloads (with sensitive values redacted)
+  - API response status codes and request IDs
+  - Keyring backend information
+  
+  This is equivalent to using the `--debug` flag on any command.
+</ParamField>
+
+## Setting environment variables
+
+<Tabs>
+  <Tab title="Linux/macOS (bash/zsh)">
+    **Temporary (current session only):**
+    ```bash
+    export NPM_BASE_URL="http://192.168.1.246/api"
+    export NPM_CLI_DEBUG=1
+    npmctl login-status
+    ```
+    
+    **Persistent (add to ~/.bashrc or ~/.zshrc):**
+    ```bash
+    echo 'export NPM_BASE_URL="http://192.168.1.246/api"' >> ~/.bashrc
+    source ~/.bashrc
+    ```
+  </Tab>
+  
+  <Tab title="Windows (PowerShell)">
+    **Temporary (current session only):**
+    ```powershell
+    $env:NPM_BASE_URL = "http://192.168.1.246/api"
+    $env:NPM_CLI_DEBUG = "1"
+    npmctl login-status
+    ```
+    
+    **Persistent (current user):**
+    ```powershell
+    [System.Environment]::SetEnvironmentVariable('NPM_BASE_URL', 'http://192.168.1.246/api', 'User')
+    ```
+  </Tab>
+  
+  <Tab title="Windows (Command Prompt)">
+    **Temporary (current session only):**
+    ```cmd
+    set NPM_BASE_URL=http://192.168.1.246/api
+    set NPM_CLI_DEBUG=1
+    npmctl login-status
+    ```
+    
+    **Persistent:**
+    ```cmd
+    setx NPM_BASE_URL "http://192.168.1.246/api"
+    ```
+  </Tab>
+</Tabs>
+
+## Usage examples
+
+### Example 1: Basic setup with environment variables
+
+```bash
+export NPM_BASE_URL="http://192.168.1.246/api"
+export CLOUDFLARE_API_TOKEN="your-cloudflare-token"
+
+# Login without --base-url (uses NPM_BASE_URL)
+npmctl login --identity admin@example.com
+
+# Create certificate without --cloudflare-api-token (uses CLOUDFLARE_API_TOKEN)
+npmctl add-cert-cloudflare --domain example.com --domain '*.example.com'
+```
+
+### Example 2: Debug mode for troubleshooting
+
+```bash
+export NPM_CLI_DEBUG=1
+
+# All commands will now show verbose debug output
+npmctl login-status
+npmctl add-proxy-host --domain app.example.com --forward-host 192.168.1.10 --forward-port 8080
+```
+
+### Example 3: CI/CD pipeline with NPM_TOKEN
+
+```bash
+# In your CI/CD environment (GitHub Actions, GitLab CI, etc.)
+export NPM_BASE_URL="${{ secrets.NPM_BASE_URL }}"
+export NPM_TOKEN="${{ secrets.NPM_TOKEN }}"
+export CLOUDFLARE_API_TOKEN="${{ secrets.CLOUDFLARE_TOKEN }}"
+
+# Commands will use environment variables automatically
+npmctl add-cert-cloudflare --domain app.example.com
+npmctl add-proxy-host --domain app.example.com --forward-host backend --forward-port 3000 --certificate-id 12
+```
+
+## Resolution priority
+
+When npmctl needs configuration values, it checks sources in this order (highest priority first):
+
+1. **Command-line options** (`--base-url`, `--token`, `--cloudflare-api-token`)
+2. **Environment variables** (`NPM_BASE_URL`, `NPM_TOKEN`, `CLOUDFLARE_API_TOKEN`)
+3. **OS keyring** (values stored via `npmctl login` or `npmctl cf-token-set`)
+4. **Legacy config file** (`~/.config/npmctl/config.json` or path from `NPM_CLI_CONFIG`)
+
+This allows you to override stored credentials temporarily without modifying keyring entries.
+
+## Best practices
+
+<Note>
+  **For interactive use:** Use `npmctl login` and `npmctl cf-token-set` to store credentials securely in your OS keyring. This is more secure than environment variables.
+</Note>
+
+<Note>
+  **For CI/CD:** Use environment variables (`NPM_TOKEN`, `CLOUDFLARE_API_TOKEN`) since keyring backends are often unavailable in containerized or headless environments.
+</Note>
+
+<Warning>
+  Never commit environment variables containing tokens to version control. Use secret management features provided by your CI/CD platform.
+</Warning>

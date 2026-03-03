@@ -1,0 +1,144 @@
+---
+title: Diagnostics command
+description: Run environment diagnostics with npmctl doctor
+---
+
+The `doctor` command runs comprehensive environment diagnostics to ensure npmctl can properly store credentials in your OS keyring.
+
+## npmctl doctor
+
+Run environment diagnostics and keyring backend checks.
+
+```bash
+npmctl doctor
+```
+
+### What it checks
+
+The doctor command performs the following checks:
+
+1. **Platform information** - Operating system and version
+2. **Python information** - Python version and executable path
+3. **Linux distribution** - Detected distribution (on Linux systems)
+4. **Keyring package** - Whether the `keyring` Python package is importable
+5. **Current keyring backend** - Which backend is currently in use
+6. **Backend recommendation** - Whether the current backend is recommended for secure storage
+7. **Available backends** - Lists all available recommended backends
+
+### Example output (success)
+
+```
+npmctl doctor
+Platform: Linux 6.1.0-18-amd64
+Python: 3.11.2 (/usr/bin/python3)
+Linux distro: Ubuntu 22.04.3 LTS
+✔ keyring Python package importable
+Current keyring backend: keyring.backends.SecretService.Keyring
+✔ current backend is recommended
+✔ at least one recommended keyring backend is available
+Recommended backends detected:
+  - keyring.backends.SecretService.Keyring
+
+All checks passed.
+```
+
+### Example output (issues found)
+
+```
+npmctl doctor
+Platform: Linux 6.1.0-18-amd64
+Python: 3.11.2 (/usr/bin/python3)
+Linux distro: Ubuntu 22.04.3 LTS
+✔ keyring Python package importable
+Current keyring backend: keyring.backends.fail.Keyring
+✔ at least one recommended keyring backend is available
+Recommended backends detected:
+  - keyring.backends.SecretService.Keyring
+
+Issues found:
+  - Current keyring backend is not recommended. Secure token storage may fail.
+
+How to fix keyring backend issues:
+Ubuntu/Debian family (recommended backend):
+  sudo apt update && sudo apt install -y gnome-keyring libsecret-1-0 dbus-user-session
+Then run `npmctl login-status` again from your normal user session (not a minimal headless shell without DBus).
+
+Fallback (less secure):
+  /usr/bin/python3 -m pip install keyrings.alt
+```
+
+### Exit codes
+
+- **0** - All checks passed
+- **1** - Issues found that may prevent secure credential storage
+
+### Interpreting results
+
+#### Successful keyring setup
+
+Look for these indicators:
+- ✔ keyring Python package importable
+- ✔ current backend is recommended
+- ✔ at least one recommended keyring backend is available
+- "All checks passed" message
+
+#### Issues to address
+
+If you see warnings about keyring backends:
+
+1. **Current backend is not recommended** - Your system may not have a secure keyring service running
+2. **No recommended keyring backend is available** - You need to install keyring software
+
+### Fix instructions by platform
+
+#### Ubuntu/Debian
+
+```bash
+sudo apt update && sudo apt install -y gnome-keyring libsecret-1-0 dbus-user-session
+```
+
+#### Fedora/RHEL/CentOS
+
+```bash
+sudo dnf install -y gnome-keyring libsecret
+```
+
+#### Arch Linux
+
+```bash
+sudo pacman -S --needed gnome-keyring libsecret
+```
+
+#### Fallback (less secure)
+
+If you can't install system keyring software, use the fallback file-based backend:
+
+```bash
+python3 -m pip install keyrings.alt
+```
+
+<Warning>
+  The fallback keyring backend (`keyrings.alt`) stores credentials in encrypted files but is less secure than native OS keyring services. Use it only when system keyring integration is not available.
+</Warning>
+
+### When to run doctor
+
+Run `npmctl doctor` when:
+
+- Setting up npmctl for the first time
+- Encountering credential storage errors
+- After system updates or OS changes
+- Moving npmctl to a new machine or environment
+- Working in Docker containers or headless environments
+
+### Headless environments
+
+In headless environments (SSH sessions, Docker containers, CI/CD), you may see keyring warnings. Options:
+
+1. Install and configure a keyring service with DBus
+2. Use the `keyrings.alt` fallback backend
+3. Pass credentials via environment variables (`NPM_TOKEN`, `CLOUDFLARE_API_TOKEN`) instead of storing them
+
+<Tip>
+  For automated environments, consider using environment variables instead of keyring storage. For development and interactive use, properly configured OS keyring is recommended.
+</Tip>

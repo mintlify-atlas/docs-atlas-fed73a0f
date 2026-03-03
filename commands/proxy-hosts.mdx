@@ -1,0 +1,211 @@
+---
+title: Proxy host commands
+description: Create and manage proxy hosts with npmctl
+---
+
+Proxy host commands allow you to create reverse proxy configurations in Nginx Proxy Manager, with or without SSL certificates.
+
+## npmctl add-proxy-host
+
+Create a proxy host without automatically creating a certificate.
+
+```bash
+npmctl add-proxy-host \
+  --domain app.example.com \
+  --forward-host 192.168.1.100 \
+  --forward-port 3000
+```
+
+### Parameters
+
+<ParamField path="--domain" type="string" required>
+  Domain name for the proxy host. Can be repeated multiple times for multi-domain hosts. Use `-d` as a shorthand.
+</ParamField>
+
+<ParamField path="--forward-host" type="string" required>
+  Upstream host IP address or hostname to proxy traffic to.
+</ParamField>
+
+<ParamField path="--forward-port" type="integer" required>
+  Upstream port number (1-65535).
+</ParamField>
+
+<ParamField path="--forward-scheme" type="string" default="http">
+  Upstream protocol scheme. Valid values: `http` or `https`
+</ParamField>
+
+<ParamField path="--certificate-id" type="integer">
+  ID of an existing certificate to use for SSL. Obtain from `npmctl add-cert-cloudflare` or the NPM UI.
+</ParamField>
+
+<ParamField path="--ssl-forced" type="boolean" default="false">
+  Force HTTPS redirect. Automatically redirects HTTP requests to HTTPS.
+</ParamField>
+
+<ParamField path="--http2-support" type="boolean" default="false">
+  Enable HTTP/2 support.
+</ParamField>
+
+<ParamField path="--hsts-enabled" type="boolean" default="false">
+  Enable HTTP Strict Transport Security (HSTS) headers.
+</ParamField>
+
+<ParamField path="--hsts-subdomains" type="boolean" default="false">
+  Apply HSTS to all subdomains.
+</ParamField>
+
+<ParamField path="--base-url" type="string">
+  API base URL. If not provided, uses the URL from your stored login.
+</ParamField>
+
+<ParamField path="--token" type="string">
+  JWT authentication token. If not provided, uses the token from your stored login. Can also be set via `NPM_TOKEN` environment variable.
+</ParamField>
+
+### Examples
+
+```bash
+# Basic HTTP proxy
+npmctl add-proxy-host \
+  -d app.example.com \
+  --forward-host 10.0.0.5 \
+  --forward-port 8080
+
+# HTTPS proxy with certificate
+npmctl add-proxy-host \
+  -d secure.example.com \
+  --forward-host backend.local \
+  --forward-port 443 \
+  --forward-scheme https \
+  --certificate-id 5 \
+  --ssl-forced \
+  --http2-support \
+  --hsts-enabled
+
+# Multi-domain proxy
+npmctl add-proxy-host \
+  -d app.example.com \
+  -d www.app.example.com \
+  --forward-host 192.168.1.50 \
+  --forward-port 3000
+```
+
+## npmctl add-proxy-with-cert
+
+Create a Cloudflare DNS certificate and proxy host together in a single operation. This is the recommended way to set up new HTTPS proxy hosts.
+
+```bash
+npmctl add-proxy-with-cert \
+  --domain app.example.com \
+  --forward-host 192.168.1.100 \
+  --forward-port 3000
+```
+
+### Parameters
+
+<ParamField path="--domain" type="string" required>
+  Domain name for the certificate and proxy host. Can be repeated multiple times. Use `-d` as a shorthand.
+</ParamField>
+
+<ParamField path="--forward-host" type="string" required>
+  Upstream host IP address or hostname to proxy traffic to.
+</ParamField>
+
+<ParamField path="--forward-port" type="integer" required>
+  Upstream port number (1-65535).
+</ParamField>
+
+<ParamField path="--cloudflare-api-token" type="string">
+  Cloudflare API token with DNS edit permissions. If not provided, reads from OS keyring or `CLOUDFLARE_API_TOKEN` environment variable.
+</ParamField>
+
+<ParamField path="--forward-scheme" type="string" default="http">
+  Upstream protocol scheme. Valid values: `http` or `https`
+</ParamField>
+
+<ParamField path="--propagation-seconds" type="integer" default="30">
+  DNS propagation wait time in seconds for certificate validation.
+</ParamField>
+
+<ParamField path="--key-type" type="string" default="rsa">
+  Certificate key type. Valid values: `rsa` or `ecdsa`
+</ParamField>
+
+<ParamField path="--ssl-forced" type="boolean" default="true">
+  Force HTTPS redirect. Note: defaults to `true` for this command.
+</ParamField>
+
+<ParamField path="--http2-support" type="boolean" default="true">
+  Enable HTTP/2 support. Note: defaults to `true` for this command.
+</ParamField>
+
+<ParamField path="--hsts-enabled" type="boolean" default="true">
+  Enable HTTP Strict Transport Security (HSTS) headers. Note: defaults to `true` for this command.
+</ParamField>
+
+<ParamField path="--hsts-subdomains" type="boolean" default="true">
+  Apply HSTS to all subdomains. Note: defaults to `true` for this command.
+</ParamField>
+
+<ParamField path="--base-url" type="string">
+  API base URL. If not provided, uses the URL from your stored login.
+</ParamField>
+
+<ParamField path="--token" type="string">
+  JWT authentication token. If not provided, uses the token from your stored login. Can also be set via `NPM_TOKEN` environment variable.
+</ParamField>
+
+### Examples
+
+```bash
+# Create secure proxy with certificate (recommended)
+npmctl add-proxy-with-cert \
+  -d app.example.com \
+  --forward-host 10.0.0.10 \
+  --forward-port 8080
+
+# Wildcard domain with ECDSA certificate
+npmctl add-proxy-with-cert \
+  -d example.com \
+  -d "*.example.com" \
+  --forward-host backend.local \
+  --forward-port 3000 \
+  --key-type ecdsa
+
+# Backend using HTTPS
+npmctl add-proxy-with-cert \
+  -d api.example.com \
+  --forward-host secure-backend.local \
+  --forward-port 443 \
+  --forward-scheme https
+
+# Custom propagation time for slow DNS
+npmctl add-proxy-with-cert \
+  -d app.example.com \
+  --forward-host 192.168.1.100 \
+  --forward-port 3000 \
+  --propagation-seconds 60
+```
+
+### How it works
+
+1. **Step 1/2**: Creates a Let's Encrypt certificate using Cloudflare DNS challenge
+2. **Step 2/2**: Creates a proxy host using the newly created certificate
+
+Both the certificate ID and proxy host ID are returned for reference.
+
+### Output
+
+```
+Step 1/2: Creating certificate via Cloudflare DNS challenge...
+Certificate created (id=5).
+Step 2/2: Creating proxy host with that certificate...
+Certificate and proxy host created successfully.
+Certificate ID: 5
+Proxy Host ID: 12
+Domains: app.example.com
+```
+
+<Tip>
+  `add-proxy-with-cert` automatically enables SSL best practices (forced HTTPS, HTTP/2, HSTS) by default. Use `add-proxy-host` if you need more control over these settings.
+</Tip>

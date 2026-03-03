@@ -1,0 +1,78 @@
+---
+title: Introduction to npmctl
+description: A powerful Python CLI for automating Nginx Proxy Manager configurations and Let's Encrypt certificates
+---
+
+npmctl is a Python CLI tool designed to streamline the management of **Nginx Proxy Manager** (NPM) proxy hosts and SSL certificates. It automates common tasks like creating Let's Encrypt certificates via Cloudflare DNS challenge and configuring proxy hosts through the NPM API.
+
+## What npmctl does
+
+npmctl provides a command-line interface for managing your Nginx Proxy Manager instance without using the web UI. It handles:
+
+- Creating Let's Encrypt certificates using **Cloudflare DNS challenge**
+- Managing proxy hosts programmatically
+- Combining certificate creation and proxy host setup in a single command
+- Securely storing credentials in your OS keyring
+
+<CardGroup cols={2}>
+  <Card title="Certificate management" icon="shield-check">
+    Create and manage Let's Encrypt SSL certificates using Cloudflare DNS challenge for wildcard and standard domains
+  </Card>
+  <Card title="Proxy host automation" icon="server">
+    Configure proxy hosts with SSL termination, forced HTTPS, and HTTP/2 support via simple commands
+  </Card>
+  <Card title="Secure credential storage" icon="key">
+    Store NPM tokens and Cloudflare API keys securely in your OS keyring (Keychain/Credential Manager/Secret Service)
+  </Card>
+  <Card title="One-command deployment" icon="bolt">
+    Create both a certificate and proxy host in a single command for rapid service deployment
+  </Card>
+</CardGroup>
+
+## Common use cases
+
+### Certificate creation
+
+Generate wildcard certificates for your domains:
+
+```bash
+npmctl add-cert-cloudflare \
+  --domain example.com \
+  --domain '*.example.com'
+```
+
+### Proxy host management
+
+Create a proxy host with SSL termination:
+
+```bash
+npmctl add-proxy-host \
+  --domain app.example.com \
+  --forward-host 192.168.1.10 \
+  --forward-port 8080 \
+  --certificate-id 12 \
+  --ssl-forced \
+  --http2-support
+```
+
+### Complete deployment
+
+Deploy a new service with certificate and proxy configuration:
+
+```bash
+npmctl add-proxy-with-cert \
+  --domain app.example.com \
+  --forward-host 192.168.1.10 \
+  --forward-port 8080
+```
+
+## Get started
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install npmctl using the automated installer script
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get up and running with your first certificate and proxy host
+  </Card>
+</CardGroup>

@@ -1,80 +1,219 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Get started with npmctl by setting up credentials and creating your first certificate and proxy host
 ---
 
-## Get started in three steps
+This guide walks you through the basic workflow of using npmctl to manage Nginx Proxy Manager configurations.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+Before starting, make sure you have:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+- npmctl installed (see [Installation](/installation))
+- A running Nginx Proxy Manager instance with an accessible API endpoint
+- NPM admin credentials (email and password)
+- A Cloudflare API token with DNS edit permissions (for SSL certificates)
+
+## Basic workflow
+
+<Steps>
+  <Step title="Run environment diagnostics">
+    Before using npmctl, check that your system has a compatible keyring backend:
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    ```bash
+    npmctl doctor
+    ```
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+    This command checks whether a recommended OS keyring backend is available and prints distro-specific install hints for Fedora/Arch/Ubuntu when it is missing.
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    <Note>
+      npmctl stores credentials securely in your OS keyring (Keychain on macOS, Credential Manager on Windows, Secret Service on Linux). If no backend is available, the doctor command will provide installation instructions.
+    </Note>
+  </Step>
+  
+  <Step title="Login to Nginx Proxy Manager">
+    Store your NPM credentials securely in the OS keyring:
+    
+    ```bash
+    npmctl login \
+      --base-url http://192.168.1.246/api \
+      --identity admin@example.com
+    ```
+    
+    Replace `http://192.168.1.246/api` with your NPM API endpoint and `admin@example.com` with your admin email. You'll be prompted for your password.
+    
+    <Note>
+      The base URL should point to your NPM API endpoint, typically `http://YOUR_NPM_HOST:81/api`
+    </Note>
+    
+    Verify your login status:
+    
+    ```bash
+    npmctl login-status
+    ```
+  </Step>
+  
+  <Step title="Store Cloudflare API token">
+    Save your Cloudflare API token for automatic certificate creation:
+    
+    ```bash
+    npmctl cf-token-set
+    ```
+    
+    You'll be prompted to enter your Cloudflare API token. This token is stored securely in your OS keyring.
+    
+    Check the token status:
+    
+    ```bash
+    npmctl cf-token-status
+    ```
+    
+    <Note>
+      After storing the token, certificate commands will use it automatically. You can still override with `--cloudflare-api-token` or the `CLOUDFLARE_API_TOKEN` environment variable.
+    </Note>
+  </Step>
+  
+  <Step title="Create a Let's Encrypt certificate">
+    Generate a wildcard SSL certificate using Cloudflare DNS challenge:
+    
+    ```bash
+    npmctl add-cert-cloudflare \
+      --domain example.com \
+      --domain '*.example.com'
+    ```
+    
+    Replace `example.com` with your domain. This creates a certificate that covers both the root domain and all subdomains.
+    
+    The command will:
+    - Request a Let's Encrypt certificate
+    - Complete the DNS challenge via Cloudflare
+    - Register the certificate in NPM
+    - Return the certificate ID for use in proxy host creation
+  </Step>
+  
+  <Step title="Create a proxy host">
+    Create a proxy host that uses the certificate you just created:
+    
+    ```bash
+    npmctl add-proxy-host \
+      --domain app.example.com \
+      --forward-host 192.168.1.10 \
+      --forward-port 8080 \
+      --certificate-id 12 \
+      --ssl-forced \
+      --http2-support
+    ```
+    
+    Replace:
+    - `app.example.com` with your subdomain
+    - `192.168.1.10` with your backend server IP
+    - `8080` with your backend service port
+    - `12` with the certificate ID from the previous step
+    
+    The flags:
+    - `--ssl-forced`: Redirects HTTP to HTTPS
+    - `--http2-support`: Enables HTTP/2 protocol
+  </Step>
+</Steps>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+## One-command deployment
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+You can combine certificate creation and proxy host setup into a single command:
 
-### Step 3: Go live
+```bash
+npmctl add-proxy-with-cert \
+  --domain app.example.com \
+  --forward-host 192.168.1.10 \
+  --forward-port 8080
+```
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+This command automatically:
+1. Creates a Let's Encrypt certificate for the domain
+2. Creates a proxy host with the new certificate
+3. Enables SSL forcing and HTTP/2 support
+
+<Note>
+  For debugging, add the `--debug` flag before the command: `npmctl --debug add-proxy-with-cert ...`
+</Note>
+
+## Additional commands
+
+### Check login status
+
+```bash
+npmctl login-status
+```
+
+### Logout and remove credentials
+
+```bash
+npmctl logout
+```
+
+### Remove Cloudflare token
+
+```bash
+npmctl cf-token-delete
+```
+
+## Using environment variables
+
+Instead of storing credentials in the keyring, you can use environment variables:
+
+```bash
+export NPM_BASE_URL="http://192.168.1.246/api"
+export NPM_TOKEN="your-npm-token"
+export CLOUDFLARE_API_TOKEN="your-cloudflare-token"
+```
+
+Available environment variables:
+- `NPM_BASE_URL`: Your NPM API endpoint
+- `NPM_TOKEN`: NPM authentication token
+- `CLOUDFLARE_API_TOKEN`: Cloudflare API token
+- `NPM_CLI_DEBUG=1`: Enable verbose request/response logs
+
+## Troubleshooting
+
+### Keyring backend not available
+
+If you see the error `Failed to read secret from keyring: No recommended backend was available`, run:
+
+```bash
+npmctl doctor
+```
+
+This provides distro-specific instructions for installing a keyring backend.
+
+**Option 1 (Recommended):** Install an OS keyring service like GNOME Keyring or KWallet.
+
+**Option 2 (Fallback):** Install the `keyrings.alt` package:
+
+```bash
+~/.npmctl/venv/bin/pip install keyrings.alt
+```
+
+<Warning>
+  `keyrings.alt` uses less secure backends. Use a proper OS keyring service when possible.
+</Warning>
+
+### Check available keyring backends
+
+```bash
+~/.npmctl/venv/bin/python -m keyring --list-backends
+```
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
+You're now ready to automate your Nginx Proxy Manager configurations! Explore more advanced features and options by running:
 
-<CardGroup cols={2}>
+```bash
+npmctl --help
+```
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+For detailed information on specific commands:
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+```bash
+npmctl add-cert-cloudflare --help
+npmctl add-proxy-host --help
+npmctl add-proxy-with-cert --help
+```

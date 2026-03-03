@@ -1,0 +1,50 @@
+---
+title: Command reference
+description: Complete reference for all npmctl CLI commands
+---
+
+npmctl is a Python CLI tool for managing Nginx Proxy Manager proxy hosts and certificates. It provides commands for authentication, certificate management, proxy host configuration, secret storage, and diagnostics.
+
+## Available commands
+
+### Authentication
+- `npmctl login` - Login and save JWT token in OS keyring
+- `npmctl login-status` - Show stored login information
+- `npmctl logout` - Remove stored login token
+
+### Certificates
+- `npmctl add-cert-cloudflare` - Create Let's Encrypt certificate using Cloudflare DNS challenge
+
+### Proxy hosts
+- `npmctl add-proxy-host` - Create a proxy host
+- `npmctl add-proxy-with-cert` - Create Cloudflare DNS certificate and proxy host together
+
+### Secrets
+- `npmctl cf-token-set` - Store Cloudflare API token in OS keyring
+- `npmctl cf-token-delete` - Delete Cloudflare API token from OS keyring
+- `npmctl cf-token-status` - Check if Cloudflare token is stored
+
+### Diagnostics
+- `npmctl doctor` - Run environment diagnostics and keyring backend checks
+
+## Global options
+
+<ParamField path="--debug" type="boolean" default="false">
+  Enable verbose request/response debug logging. Can also be set via `NPM_CLI_DEBUG` environment variable.
+</ParamField>
+
+## Getting help
+
+To see help for any command, use the `-h` or `--help` flag:
+
+```bash
+npmctl --help
+npmctl login --help
+npmctl add-proxy-host --help
+```
+
+To view the version:
+
+```bash
+npmctl --version
+```

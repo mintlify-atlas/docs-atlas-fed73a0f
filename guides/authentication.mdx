@@ -1,0 +1,161 @@
+---
+title: Authentication
+description: Learn how to authenticate with Nginx Proxy Manager and manage login tokens securely in your OS keyring
+---
+
+The npmctl CLI uses JWT token authentication to communicate with your Nginx Proxy Manager API. All authentication tokens are stored securely in your operating system's keyring (Keychain on macOS, Credential Manager on Windows, Secret Service on Linux).
+
+## Login process
+
+To authenticate with your Nginx Proxy Manager instance, you need three pieces of information:
+
+- **Base URL**: The API endpoint (e.g., `http://192.168.1.246/api`)
+- **Identity**: Your NPM user email
+- **Secret**: Your NPM password
+
+<Steps>
+  <Step title="Run the login command">
+    ```bash
+    npmctl login \
+      --base-url http://192.168.1.246/api \
+      --identity admin@example.com
+    ```
+    
+    The CLI will prompt you to enter your password securely (input is hidden).
+  </Step>
+
+  <Step title="Token is stored in OS keyring">
+    After successful authentication, npmctl receives a JWT token from the NPM API and stores it in your OS keyring along with:
+    - The base URL
+    - Your identity (email)
+    - Token expiration time
+    
+    You'll see a confirmation message:
+    ```
+    Login successful. Token saved in OS keyring.
+    Token expires: 2026-03-10T12:34:56.000Z
+    ```
+  </Step>
+
+  <Step title="Subsequent commands use stored credentials">
+    After logging in, all other npmctl commands automatically use the stored token and base URL. You don't need to pass `--base-url` or `--token` flags for every command.
+  </Step>
+</Steps>
+
+## Checking login status
+
+To verify that your login credentials are stored and view non-sensitive details:
+
+```bash
+npmctl login-status
+```
+
+This displays:
+- Whether login info exists in the keyring
+- Your identity (email)
+- The base URL you're authenticated against
+- Token expiration timestamp
+
+<Accordion title="Example output">
+  ```
+  Stored login found in OS keyring.
+  Identity: admin@example.com
+  Base URL: http://192.168.1.246/api
+  Token expires: 2026-03-10T12:34:56.000Z
+  ```
+</Accordion>
+
+<Note>
+  If no login is found, you'll see: `No stored login found in OS keyring.`
+</Note>
+
+## Logging out
+
+To remove your stored authentication token from the OS keyring:
+
+```bash
+npmctl logout
+```
+
+This completely removes all login information, including the JWT token, base URL, and identity. You'll need to run `login` again to use npmctl commands.
+
+## Environment variable overrides
+
+You can override stored credentials using environment variables:
+
+```bash
+# Override base URL
+export NPM_BASE_URL=http://192.168.1.246/api
+
+# Override JWT token (useful for CI/CD)
+export NPM_TOKEN=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+
+# Run command with overrides
+npmctl add-cert-cloudflare --domain example.com
+```
+
+Or pass them directly to specific commands:
+
+```bash
+npmctl add-proxy-host \
+  --base-url http://192.168.1.246/api \
+  --token eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9... \
+  --domain app.example.com \
+  --forward-host 192.168.1.10 \
+  --forward-port 8080
+```
+
+<Warning>
+  Environment variables and command-line flags take precedence over keyring-stored credentials.
+</Warning>
+
+## Token scope
+
+The `login` command accepts an optional `--scope` parameter (defaults to `user`):
+
+```bash
+npmctl login \
+  --base-url http://192.168.1.246/api \
+  --identity admin@example.com \
+  --scope user
+```
+
+## 2FA authentication
+
+<Warning>
+  If your NPM account has 2FA enabled, the login command will fail with:
+  ```
+  2FA required. Use /tokens/2fa flow manually for now.
+  ```
+  
+  Currently, you must obtain a token manually through the NPM API's `/tokens/2fa` endpoint and provide it via `NPM_TOKEN` environment variable or `--token` flag.
+</Warning>
+
+## How tokens are stored
+
+npmctl uses the Python `keyring` library to store credentials securely:
+
+- **macOS**: Keychain
+- **Windows**: Credential Manager
+- **Linux**: Secret Service (GNOME Keyring, KWallet) or KWallet
+
+The stored data includes:
+- `base_url`: API endpoint URL
+- `token`: JWT authentication token
+- `expires`: Token expiration timestamp (ISO 8601 format)
+- `identity`: User email address
+
+<Tip>
+  If you're having issues with keyring backends on Linux, run `npmctl doctor` to diagnose the problem and get distro-specific installation instructions.
+</Tip>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Secrets management" icon="key" href="/guides/secrets-management">
+    Store your Cloudflare API token in the keyring
+  </Card>
+  <Card title="Certificate management" icon="certificate" href="/guides/certificates">
+    Create Let's Encrypt certificates via Cloudflare DNS
+  </Card>
+</CardGroup>

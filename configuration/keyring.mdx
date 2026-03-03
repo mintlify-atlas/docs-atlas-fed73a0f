@@ -1,0 +1,266 @@
+---
+title: OS keyring configuration
+description: How npmctl uses OS keyring backends to securely store API tokens and Cloudflare credentials
+---
+
+npmctl stores sensitive credentials (NPM API tokens and Cloudflare API tokens) in your operating system's secure keyring backend. This provides better security than storing tokens in plain text configuration files.
+
+## How npmctl uses keyring
+
+When you run `npmctl login` or `npmctl cf-token-set`, the CLI stores credentials in your OS keyring using the Python `keyring` library. These credentials are encrypted and managed by your operating system's native credential storage.
+
+**Stored credentials:**
+- **Login information** (base URL, JWT token, expiration, identity) - stored via `npmctl login`
+- **Cloudflare API token** - stored via `npmctl cf-token-set`
+
+**Service name:** `npmctl`  
+**Legacy service name:** `npm-cli` (for backward compatibility)
+
+The CLI automatically falls back to checking the legacy service name if credentials aren't found under the current service name.
+
+## Supported keyring backends
+
+The `keyring` library supports multiple backends depending on your operating system:
+
+<Tabs>
+  <Tab title="macOS">
+    **Backend:** Keychain (built-in)
+    
+    macOS Keychain is automatically available and is a recommended backend. No additional setup is required.
+    
+    You can view stored credentials in the Keychain Access application:
+    1. Open **Keychain Access**
+    2. Search for **"npmctl"**
+    3. Double-click entries to view metadata (tokens are encrypted)
+  </Tab>
+  
+  <Tab title="Windows">
+    **Backend:** Windows Credential Manager (built-in)
+    
+    Windows Credential Manager is automatically available and is a recommended backend. No additional setup is required.
+    
+    You can view stored credentials in Credential Manager:
+    1. Open **Control Panel** → **Credential Manager**
+    2. Click **Windows Credentials**
+    3. Look for entries containing **"npmctl"**
+  </Tab>
+  
+  <Tab title="Linux">
+    **Recommended backends:**
+    - **Secret Service** (GNOME Keyring, KDE KWallet)
+    - **KWallet** (KDE Plasma)
+    
+    Linux requires a keyring service to be installed and running. Many desktop environments include one by default, but minimal/headless installations may not.
+    
+    ### Installing keyring backends
+    
+    <Tabs>
+      <Tab title="Ubuntu/Debian">
+        ```bash
+        sudo apt update
+        sudo apt install -y gnome-keyring libsecret-1-0 dbus-user-session
+        ```
+        
+        Ensure the keyring daemon starts with your session (usually automatic in GNOME/Ubuntu Desktop).
+      </Tab>
+      
+      <Tab title="Fedora/RHEL">
+        ```bash
+        sudo dnf install -y gnome-keyring libsecret
+        ```
+        
+        The keyring daemon should start automatically with your desktop session.
+      </Tab>
+      
+      <Tab title="Arch Linux">
+        ```bash
+        sudo pacman -S --needed gnome-keyring libsecret
+        ```
+        
+        You may need to start the keyring daemon manually if not using a desktop environment:
+        ```bash
+        eval $(gnome-keyring-daemon --start --components=secrets)
+        ```
+      </Tab>
+    </Tabs>
+    
+    <Note>
+      The keyring backend requires a running D-Bus session. If you're using a minimal environment (like SSH without X11 forwarding), you may need to use the fallback `keyrings.alt` backend.
+    </Note>
+  </Tab>
+</Tabs>
+
+## Checking keyring status
+
+Use the `doctor` command to check your keyring backend status:
+
+```bash
+npmctl doctor
+```
+
+**Example output:**
+```
+npmctl doctor
+Platform: Linux 6.5.0-28-generic
+Python: 3.11.8 (/home/user/.npmctl/venv/bin/python)
+Linux distro: Ubuntu 24.04 LTS
+✔ keyring Python package importable
+Current keyring backend: keyring.backends.SecretService.Keyring
+✔ current backend is recommended
+✔ at least one recommended keyring backend is available
+Recommended backends detected:
+  - keyring.backends.SecretService.Keyring
+
+All checks passed.
+```
+
+You can also list all available backends manually:
+
+```bash
+~/.npmctl/venv/bin/python -m keyring --list-backends
+```
+
+## Fallback to keyrings.alt
+
+If no recommended keyring backend is available (common in headless Linux environments, Docker containers, or SSH sessions), you can install the `keyrings.alt` package as a fallback.
+
+<Warning>
+  `keyrings.alt` provides **less secure** storage backends (file-based encryption). Only use this if you cannot install a proper OS keyring service.
+</Warning>
+
+### Installing keyrings.alt
+
+If you installed npmctl using the installer script:
+
+```bash
+~/.npmctl/venv/bin/pip install keyrings.alt
+```
+
+If you're using `uv` for development:
+
+```bash
+uv pip install keyrings.alt
+```
+
+After installation, verify that a backend is available:
+
+```bash
+npmctl doctor
+```
+
+The `keyrings.alt` package provides file-based keyring backends that store encrypted credentials in `~/.local/share/python_keyring/` or similar locations.
+
+## Troubleshooting keyring issues
+
+### Error: "No recommended backend was available"
+
+This error occurs when npmctl cannot find a secure keyring backend.
+
+**Solution:**
+
+1. Run diagnostics:
+   ```bash
+   npmctl doctor
+   ```
+
+2. Follow the platform-specific installation instructions provided by the `doctor` command.
+
+3. If you cannot install a proper keyring backend (e.g., in CI/CD or headless environments), install `keyrings.alt`:
+   ```bash
+   ~/.npmctl/venv/bin/pip install keyrings.alt
+   ```
+
+4. Alternatively, use environment variables instead of keyring storage:
+   ```bash
+   export NPM_BASE_URL="http://192.168.1.246/api"
+   export NPM_TOKEN="your-jwt-token"
+   export CLOUDFLARE_API_TOKEN="your-cloudflare-token"
+   ```
+
+### Error: "Failed to read secret from keyring"
+
+This can occur if:
+- The keyring backend is not running (Linux)
+- D-Bus is not available (Linux)
+- Permissions prevent access to the keyring
+
+**Solution:**
+
+1. **Check if the keyring daemon is running** (Linux):
+   ```bash
+   ps aux | grep gnome-keyring
+   ```
+
+2. **Start the keyring daemon manually** (if needed):
+   ```bash
+   eval $(gnome-keyring-daemon --start --components=secrets)
+   ```
+
+3. **Ensure D-Bus is running** (Linux):
+   ```bash
+   echo $DBUS_SESSION_BUS_ADDRESS
+   ```
+   
+   If this is empty, you may need to start a D-Bus session:
+   ```bash
+   dbus-run-session -- bash
+   ```
+
+4. **Run from a proper user session:** If you're in an SSH session, the keyring might not be accessible. Try logging in directly or use environment variables instead.
+
+### Headless/CI environments
+
+Keyring backends typically require a graphical session or D-Bus. For headless environments (Docker, CI/CD pipelines, cron jobs), use environment variables instead:
+
+```bash
+export NPM_BASE_URL="http://192.168.1.246/api"
+export NPM_TOKEN="your-jwt-token"
+export CLOUDFLARE_API_TOKEN="your-cloudflare-token"
+
+npmctl add-cert-cloudflare --domain example.com
+```
+
+### Viewing stored credentials
+
+To check if credentials are stored correctly:
+
+```bash
+npmctl login-status
+npmctl cf-token-status
+```
+
+These commands will show whether credentials are found in the keyring without revealing the actual token values.
+
+## Removing stored credentials
+
+To remove credentials from the keyring:
+
+```bash
+# Remove NPM login credentials
+npmctl logout
+
+# Remove Cloudflare API token
+npmctl cf-token-delete
+```
+
+This deletes the credentials from both the current service name (`npmctl`) and the legacy service name (`npm-cli`).
+
+## Security considerations
+
+<Note>
+  **OS keyring (recommended):** Credentials are encrypted and managed by your operating system's native credential storage. Access is restricted to your user account.
+</Note>
+
+<Warning>
+  **keyrings.alt (fallback):** Credentials are encrypted but stored in files on disk. This is less secure than OS-managed keyring backends. File permissions restrict access, but physical access to the filesystem could potentially expose credentials.
+</Warning>
+
+<Warning>
+  **Environment variables:** Credentials are stored in plain text in environment variables or shell configuration files. Only use this approach in trusted environments or for temporary overrides.
+</Warning>
+
+For maximum security:
+1. Use `npmctl login` and `npmctl cf-token-set` on systems with proper OS keyring backends
+2. Avoid storing credentials in shell configuration files (`.bashrc`, `.zshrc`)
+3. Use environment variables only in CI/CD environments with secret management
+4. Regularly rotate API tokens and update stored credentials
