@@ -1,0 +1,68 @@
+{
+  "projectType": "cli-tool",
+  "projectName": "npmctl",
+  "projectDescription": "A CLI tool for managing Nginx Proxy Manager proxy hosts and Let's Encrypt certificates via Cloudflare DNS challenge",
+  "theme": "aspen",
+  "primaryColor": "#009639",
+  "lightColor": "#00c853",
+  "darkColor": "#006624",
+  "navigation": {
+    "groups": [
+      {
+        "group": "Get Started",
+        "pages": [
+          "introduction",
+          "installation",
+          "quickstart"
+        ]
+      },
+      {
+        "group": "Guides",
+        "pages": [
+          "guides/authentication",
+          "guides/certificates",
+          "guides/proxy-hosts",
+          "guides/secrets-management",
+          "guides/troubleshooting"
+        ]
+      },
+      {
+        "group": "Command Reference",
+        "pages": [
+          "commands/overview",
+          "commands/auth",
+          "commands/certificates",
+          "commands/proxy-hosts",
+          "commands/secrets",
+          "commands/doctor"
+        ]
+      },
+      {
+        "group": "Configuration",
+        "pages": [
+          "configuration/environment-variables",
+          "configuration/keyring"
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Secure token storage in OS keyring",
+    "Let's Encrypt certificates via Cloudflare DNS challenge",
+    "Nginx Proxy Manager proxy host management",
+    "Combined certificate and proxy host creation",
+    "Environment diagnostics with doctor command"
+  ],
+  "publicApiSurface": [
+    "npmctl login",
+    "npmctl login-status",
+    "npmctl logout",
+    "npmctl add-cert-cloudflare",
+    "npmctl add-proxy-host",
+    "npmctl add-proxy-with-cert",
+    "npmctl cf-token-set",
+    "npmctl cf-token-delete",
+    "npmctl cf-token-status",
+    "npmctl doctor"
+  ]
+}
